@@ -111,7 +111,7 @@ app.post('/createmaster', function(req, res) {
                 slaves: [],
                 masterId: '0',
                 isOk: true,
-                lastLocation: {lat: 0, long: 0},
+                lastLocations: [],
                 isActive: false,
                 interval: 0,
             });
@@ -152,26 +152,15 @@ app.post('/masterslaves', function(req, res) {
                     '_id': { $in: idsArray}
                 }, function(err, slaves) {
                     const slavesArr = slaves.map(slave => {
-                        const slaveToFront = {
+                        return {
                             id: slave.id,
                             name: slave.name,
                             isOk: slave.isOk,
                             phone: slave.phone,
                             isActive: slave.isActive,
-                            interval: slave.interval
-                        };
-                        if (
-                            slave.lastLocation !== undefined
-                            && slave.lastLocation.lat !== 0
-                            && slave.lastLocation.long !== 0
-                        ) {
-                            slaveToFront.lastLocation = {
-                                lat: slave.lastLocation.lat,
-                                long: slave.lastLocation.long
-                            }
+                            interval: slave.interval,
+                            lastLocations: slave.lastLocations
                         }
-
-                        return slaveToFront
                     });
                     res.end(JSON.stringify({
                         ok: true,
@@ -220,7 +209,7 @@ app.post('/createslave', function(req, res) {
                             slaves: [],
                             masterId: user.id,
                             isOk: true,
-                            lastLocation: {lat: 0, long: 0},
+                            lastLocations: [],
                             isActive: false,
                             interval: 60 * 60,
                         });
@@ -273,7 +262,7 @@ app.post('/getslave', function(req, res) {
                         name: slave.name,
                         isOk: slave.isOk,
                         phone: slave.phone,
-                        lastLocation: slave.lastLocation,
+                        lastLocations: slave.lastLocations,
                         isActive: slave.isActive,
                         interval: slave.interval,
                     };

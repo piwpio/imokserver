@@ -9,7 +9,7 @@ const userModel = {
     //slave stuff
     masterId: String,
     isOk: Boolean,
-    lastLocation: {lat: Number, long: Number},
+    lastLocations: Array,
     isActive: Boolean,
     interval: Number
 };
