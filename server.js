@@ -294,3 +294,39 @@ app.post('/getslave', function(req, res) {
         }
     });
 });
+
+/**
+ * Master update slave activity slave
+ */
+app.post('/manageslave', function(req, res) {
+    res.setHeader('Content-Type', 'application/json');
+
+    const reqBody = req.body;
+    const validator = Validator.validate(reqBody, Validator.manageSlave, true);
+    if (validator.isError) {
+        res.status(validator.code).send(validator.message);
+        return;
+    }
+
+    MUserModel.findOne({token : reqBody.token}, function (err, user) {
+        if (user && user.isMaster) {
+            MUserModel.findOne({_id: reqBody.slave_id, masterId: user._id}, (err, slave) => {
+                if (slave) {
+                    MUserModel.findByIdAndUpdate(reqBody.slave_id, {isActive: reqBody.is_active, interval: reqBody.interval}, (err, doc) => {
+                        res.end(JSON.stringify({
+                            ok: true
+                        }));
+                    });
+                } else {
+                    res.end(JSON.stringify({
+                        ok: false,
+                        message: 'No slave in DB'
+                    }));
+                }
+            });
+
+        } else {
+            res.status(401).send('Unauthorized');
+        }
+    });
+});

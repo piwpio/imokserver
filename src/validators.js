@@ -79,10 +79,23 @@ function getSlave(reqBody) {
     }
 }
 
+function manageSlave(reqBody) {
+    if (
+        reqBody.slave_id === undefined
+        || reqBody.is_active === undefined
+        || reqBody.interval === undefined
+    ) {
+        return _returnError(422, 'Not all parameters');
+    } else if (!reqBody.slave_id || typeof reqBody.is_active !== 'boolean' || !reqBody.interval) {
+        return _returnError(422, 'Not all parameters filled');
+    }
+}
+
 module.exports = {
     validate: validate,
     login: login,
     createMaster: createMaster,
     createSlave: createSlave,
-    getSlave: getSlave
+    getSlave: getSlave,
+    manageSlave: manageSlave
 };
