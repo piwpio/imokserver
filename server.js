@@ -111,10 +111,9 @@ app.post('/createmaster', function(req, res) {
                 slaves: [],
                 masterId: '0',
                 isOk: true,
-                lastLocation: {
-                    lat: 0,
-                    long: 0
-                }
+                lastLocation: {lat: 0, long: 0},
+                isActive: false,
+                interval: 0,
             });
             user.save().then(() => {
                 res.end(JSON.stringify({
@@ -157,7 +156,9 @@ app.post('/masterslaves', function(req, res) {
                             id: slave.id,
                             name: slave.name,
                             isOk: slave.isOk,
-                            phone: slave.phone
+                            phone: slave.phone,
+                            isActive: slave.isActive,
+                            interval: slave.interval
                         };
                         if (
                             slave.lastLocation !== undefined
@@ -219,10 +220,9 @@ app.post('/createslave', function(req, res) {
                             slaves: [],
                             masterId: user.id,
                             isOk: true,
-                            lastLocation: {
-                                lat: 0,
-                                long: 0
-                            }
+                            lastLocation: {lat: 0, long: 0},
+                            isActive: false,
+                            interval: 60 * 60,
                         });
                         slave.save((err, slave) => {
                             user.slaves.push(slave.id);
@@ -245,6 +245,50 @@ app.post('/createslave', function(req, res) {
                     message: 'Too many slaves'
                 }));
             }
+        } else {
+            res.status(401).send('Unauthorized');
+        }
+    });
+});
+
+/**
+ * Master get slave
+ */
+app.post('/getslave', function(req, res) {
+    res.setHeader('Content-Type', 'application/json');
+
+    const reqBody = req.body;
+    const validator = Validator.validate(reqBody, Validator.getSlave, true);
+    if (validator.isError) {
+        res.status(validator.code).send(validator.message);
+        return;
+    }
+
+    MUserModel.findOne({token : reqBody.token}, function (err, user) {
+        if (user && user.isMaster) {
+            MUserModel.findOne({_id: reqBody.slave_id, masterId: user._id}, (err, slave) => {
+                if (slave) {
+                    const slaveRes = {
+                        id: slave.id,
+                        name: slave.name,
+                        isOk: slave.isOk,
+                        phone: slave.phone,
+                        lastLocation: slave.lastLocation,
+                        isActive: slave.isActive,
+                        interval: slave.interval,
+                    };
+                    res.end(JSON.stringify({
+                        ok: true,
+                        data: slaveRes
+                    }));
+                } else {
+                    res.end(JSON.stringify({
+                        ok: false,
+                        message: 'No slave in DB'
+                    }));
+                }
+            });
+
         } else {
             res.status(401).send('Unauthorized');
         }

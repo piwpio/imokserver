@@ -71,9 +71,18 @@ function createSlave(reqBody) {
     }
 }
 
+function getSlave(reqBody) {
+    if (reqBody.slave_id === undefined) {
+        return _returnError(422, 'Not all parameters');
+    } else if (!reqBody.slave_id) {
+        return _returnError(422, 'Not all parameters filled');
+    }
+}
+
 module.exports = {
     validate: validate,
     login: login,
     createMaster: createMaster,
-    createSlave: createSlave
+    createSlave: createSlave,
+    getSlave: getSlave
 };
