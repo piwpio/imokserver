@@ -1,39 +1,53 @@
-function createMaster(reqBody) {
-    let isError = false;
-    let code;
-    let message;
+function _isBody(reqBody) {
+    return reqBody !== undefined;
+}
 
-    if (reqBody === undefined) {
-        isError = true;
-        code = 422;
-        message = 'No body';
-    } else if (
+function _returnError(code, message) {
+    return {isError: true, code: code, message: message,}
+}
+
+function _returnSuccess() {
+    return {isError: false, code: '', message: '',}
+}
+
+function validate(reqBody, validator) {
+    if (!_isBody(reqBody)) {
+        return _returnError(422, 'No body');
+    }
+    const customValidator = validator(reqBody);
+    if (customValidator && customValidator.isError) {
+        return customValidator;
+    } else {
+        return _returnSuccess();
+    }
+}
+
+function createMaster(reqBody) {
+    if (
         reqBody.name === undefined
         || reqBody.email === undefined
         || reqBody.phone === undefined
         || reqBody.password === undefined
         || reqBody.repassword === undefined
     ) {
-        isError = true;
-        code = 422;
-        message = 'Not all parameters';
+        return _returnError(422, 'Not all parameters');
     } else if (!reqBody.name || !reqBody.email || !reqBody.phone || !reqBody.password || !reqBody.repassword) {
-        isError = true;
-        code = 422;
-        message = 'Not all parameters filled';
+        return _returnError(422, 'Not all parameters filled');
     } else if (reqBody.password !== reqBody.repassword) {
-        isError = true;
-        code = 422;
-        message = 'Passwords mismatch';
+        return _returnError(422, 'Passwords mismatch');
     }
+}
 
-    return {
-        isError: isError,
-        code: code,
-        message: message,
+function login(reqBody) {
+    if (reqBody.password === undefined || reqBody.email === undefined) {
+        return _returnError(422, 'Not all parameters');
+    } else if (!reqBody.email || !reqBody.password) {
+        return _returnError(422, 'Not all parameters filled');
     }
 }
 
 module.exports = {
+    validate: validate,
+    login: createMaster,
     createMaster: createMaster
 };

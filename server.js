@@ -3,9 +3,11 @@ const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 const PASS_SALT = 'mlecznakrowalaciatka';
+const TOKEN_SALT = 'najlepszememe';
 
 const model = require('./src/models');
 const MUserSchema = new mongoose.Schema(model.userModel);
+const MUserModel = mongoose.model('imok_users', MUserSchema);
 
 const Validator = require('./src/validators');
 
@@ -36,20 +38,64 @@ mongoose.connect(
 console.log("SERVER STARTED");
 
 /**
+ * login
+ */
+app.post('/login', function(req, res) {
+    const reqBody = req.body;
+    const validator = Validator.validate(reqBody, Validator.login);
+    if (validator.isError) {
+        res.status(validator.code).send(validator.message);
+        return;
+    }
+
+    MUserModel.findOne({email : reqBody.email}, function (err, document) {
+        if (document) {
+            const password = crypto.createHash('sha256', PASS_SALT).update(reqBody.password).digest('hex');
+            if (password === document.password) {
+                const a = Date.now() + '.' + new Date().getMilliseconds();
+                const token = crypto.createHash('sha256', TOKEN_SALT).update(a).digest('hex');
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({
+                    ok: true,
+                    data: {
+                        id: document.id,
+                        name: document.name,
+                        email: document.email,
+                        phone: document.phone,
+                        isMaster: document.isMaster,
+                        token: token
+                    }
+                }));
+            } else {
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({
+                    ok: false,
+                    message: 'No user or wrong password'
+                }));
+            }
+        } else {
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({
+                ok: false,
+                message: 'No user or wrong password'
+            }));
+        }
+    });
+});
+/**
  * New master registration
  */
 app.post('/createmaster', function(req, res) {
     const reqBody = req.body;
-
-    const validator = Validator.createMaster(reqBody);
+    const validator = Validator.validate(reqBody, Validator.createMaster);
     if (validator.isError) {
-        res.status(validator.message).send(validator.message);
+        res.status(validator.code).send(validator.message);
         return;
     }
 
-    let MUserModel = mongoose.model('imok_users', MUserSchema);
+
     MUserModel.findOne({email : reqBody.email}, function (err, document) {
-        if (!document){
+        if (!document) {
             const password = crypto.createHash('sha256', PASS_SALT).update(reqBody.password).digest('hex');
             const user = new MUserModel({
                 name: reqBody.name,
@@ -73,13 +119,3 @@ app.post('/createmaster', function(req, res) {
         }
     });
 });
-
-
-
-
-
-
-// const User = mongoose.model('imok_users', { name: String });
-//
-// const user = new User({ name: 'Zildjian' });
-// user.save().then(() => console.log('jebać'));
