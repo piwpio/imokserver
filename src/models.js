@@ -6,7 +6,13 @@ const userModel = {
     token: String,
     isMaster: Boolean,
     slaves: Array, //slaves ids
-    masterId: String
+    //slave stuff
+    masterId: String,
+    isOk: Boolean,
+    lastLocation: {
+        lat: Number,
+        long: Number
+    }
 };
 
 module.exports = {

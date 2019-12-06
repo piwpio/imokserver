@@ -109,7 +109,12 @@ app.post('/createmaster', function(req, res) {
                 token: password,
                 isMaster: true,
                 slaves: [],
-                masterId: '0'
+                masterId: '0',
+                isOk: true,
+                lastLocation: {
+                    lat: 0,
+                    long: 0
+                }
             });
             user.save().then(() => {
                 res.end(JSON.stringify({
@@ -147,9 +152,29 @@ app.post('/masterslaves', function(req, res) {
                 MUserModel.find({
                     '_id': { $in: idsArray}
                 }, function(err, slaves) {
+                    const slavesArr = slaves.map(slave => {
+                        const slaveToFront = {
+                            id: slave.id,
+                            name: slave.name,
+                            isOk: slave.isOk,
+                            phone: slave.phone
+                        };
+                        if (
+                            slave.lastLocation !== undefined
+                            && slave.lastLocation.lat !== 0
+                            && slave.lastLocation.long !== 0
+                        ) {
+                            slaveToFront.lastLocation = {
+                                lat: slave.lastLocation.lat,
+                                long: slave.lastLocation.long
+                            }
+                        }
+
+                        return slaveToFront
+                    });
                     res.end(JSON.stringify({
                         ok: true,
-                        data: slaves
+                        data: slavesArr
                     }));
                 })
             } else {
@@ -181,21 +206,38 @@ app.post('/createslave', function(req, res) {
     MUserModel.findOne({token : reqBody.token}, function (err, user) {
         if (user && user.isMaster) {
             if (user.slaves.length < 3) {
-                const password = crypto.createHash('sha256', PASS_SALT).update(reqBody.password+'').digest('hex');
-                const slave = new MUserModel({
-                    name: reqBody.name,
-                    email: '',
-                    phone: reqBody.phone,
-                    password: password,
-                    token: password,
-                    isMaster: false,
-                    slaves: [],
-                    masterId: user.id
-                });
-                slave.save().then(() => {
-                    res.end(JSON.stringify({
-                        ok: true,
-                    }));
+                MUserModel.findOne({name: reqBody.name, masterId: user._id}, (err, slaveExist) => {
+                    if (!slaveExist) {
+                        const password = crypto.createHash('sha256', PASS_SALT).update(reqBody.password+'').digest('hex');
+                        const slave = new MUserModel({
+                            name: reqBody.name,
+                            email: '',
+                            phone: reqBody.phone,
+                            password: password,
+                            token: password,
+                            isMaster: false,
+                            slaves: [],
+                            masterId: user.id,
+                            isOk: true,
+                            lastLocation: {
+                                lat: 0,
+                                long: 0
+                            }
+                        });
+                        slave.save((err, slave) => {
+                            user.slaves.push(slave.id);
+                            user.save().then(() => {
+                                res.end(JSON.stringify({
+                                    ok: true,
+                                }));
+                            });
+                        })
+                    } else {
+                        res.end(JSON.stringify({
+                            ok: false,
+                            message: 'Slave with name already exists'
+                        }));
+                    }
                 });
             } else {
                 res.end(JSON.stringify({
