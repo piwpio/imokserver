@@ -41,6 +41,8 @@ console.log("SERVER STARTED");
  * login
  */
 app.post('/login', function(req, res) {
+    res.setHeader('Content-Type', 'application/json');
+
     const reqBody = req.body;
     const validator = Validator.validate(reqBody, Validator.login);
     if (validator.isError) {
@@ -48,33 +50,33 @@ app.post('/login', function(req, res) {
         return;
     }
 
-    MUserModel.findOne({email : reqBody.email}, function (err, document) {
-        if (document) {
+    MUserModel.findOne({email : reqBody.email}, function (err, user) {
+        if (user) {
             const password = crypto.createHash('sha256', PASS_SALT).update(reqBody.password).digest('hex');
-            if (password === document.password) {
+            if (password === user.password) {
                 const a = Date.now() + '.' + new Date().getMilliseconds();
                 const token = crypto.createHash('sha256', TOKEN_SALT).update(a).digest('hex');
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({
-                    ok: true,
-                    data: {
-                        id: document.id,
-                        name: document.name,
-                        email: document.email,
-                        phone: document.phone,
-                        isMaster: document.isMaster,
-                        token: token
-                    }
-                }));
+
+                MUserModel.findByIdAndUpdate(user.id, {token: token}, (err, doc) => {
+                    res.end(JSON.stringify({
+                        ok: true,
+                        data: {
+                            id: user.id,
+                            name: user.name,
+                            email: user.email,
+                            phone: user.phone,
+                            isMaster: user.isMaster,
+                            token: token
+                        }
+                    }));
+                });
             } else {
-                res.setHeader('Content-Type', 'application/json');
                 res.end(JSON.stringify({
                     ok: false,
                     message: 'No user or wrong password'
                 }));
             }
         } else {
-            res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({
                 ok: false,
                 message: 'No user or wrong password'
@@ -82,17 +84,19 @@ app.post('/login', function(req, res) {
         }
     });
 });
+
 /**
  * New master registration
  */
 app.post('/createmaster', function(req, res) {
+    res.setHeader('Content-Type', 'application/json');
+
     const reqBody = req.body;
     const validator = Validator.validate(reqBody, Validator.createMaster);
     if (validator.isError) {
         res.status(validator.code).send(validator.message);
         return;
     }
-
 
     MUserModel.findOne({email : reqBody.email}, function (err, document) {
         if (!document) {
@@ -102,20 +106,105 @@ app.post('/createmaster', function(req, res) {
                 email: reqBody.email,
                 phone: reqBody.phone,
                 password: password,
-                isMaster: true
+                token: password,
+                isMaster: true,
+                slaves: [],
+                masterId: '0'
             });
             user.save().then(() => {
-                res.setHeader('Content-Type', 'application/json');
                 res.end(JSON.stringify({
                     ok: true,
                 }));
             });
         } else {
-            res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({
                 ok: false,
                 message: 'User already exists'
             }));
+        }
+    });
+});
+
+/**
+ * Master get slaves
+ */
+app.post('/masterslaves', function(req, res) {
+    res.setHeader('Content-Type', 'application/json');
+
+    const reqBody = req.body;
+    const validator = Validator.validate(reqBody, null, true);
+    if (validator.isError) {
+        res.status(validator.code).send(validator.message);
+        return;
+    }
+
+    MUserModel.findOne({token : reqBody.token}, function (err, user) {
+        if (user && user.isMaster) {
+            if (user.slaves !== undefined && user.slaves.length > 0) {
+                const idsArray = user.slaves.map(element => {
+                    return mongoose.Types.ObjectId(element);
+                });
+                MUserModel.find({
+                    '_id': { $in: idsArray}
+                }, function(err, slaves) {
+                    res.end(JSON.stringify({
+                        ok: true,
+                        data: slaves
+                    }));
+                })
+            } else {
+                res.end(JSON.stringify({
+                    ok: true,
+                    data: []
+                }));
+            }
+
+        } else {
+            res.status(401).send('Unauthorized');
+        }
+    });
+});
+
+/**
+ * Master create slave
+ */
+app.post('/createslave', function(req, res) {
+    res.setHeader('Content-Type', 'application/json');
+
+    const reqBody = req.body;
+    const validator = Validator.validate(reqBody, Validator.createSlave, true);
+    if (validator.isError) {
+        res.status(validator.code).send(validator.message);
+        return;
+    }
+
+    MUserModel.findOne({token : reqBody.token}, function (err, user) {
+        if (user && user.isMaster) {
+            if (user.slaves.length < 3) {
+                const password = crypto.createHash('sha256', PASS_SALT).update(reqBody.password+'').digest('hex');
+                const slave = new MUserModel({
+                    name: reqBody.name,
+                    email: '',
+                    phone: reqBody.phone,
+                    password: password,
+                    token: password,
+                    isMaster: false,
+                    slaves: [],
+                    masterId: user.id
+                });
+                slave.save().then(() => {
+                    res.end(JSON.stringify({
+                        ok: true,
+                    }));
+                });
+            } else {
+                res.end(JSON.stringify({
+                    ok: false,
+                    message: 'Too many slaves'
+                }));
+            }
+        } else {
+            res.status(401).send('Unauthorized');
         }
     });
 });

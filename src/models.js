@@ -3,7 +3,10 @@ const userModel = {
     email: String,
     phone: String,
     password: String,
-    isMaster: Boolean
+    token: String,
+    isMaster: Boolean,
+    slaves: Array, //slaves ids
+    masterId: String
 };
 
 module.exports = {
