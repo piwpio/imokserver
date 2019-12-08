@@ -11,7 +11,6 @@ const MUserModel = mongoose.model('imok_users', MUserSchema);
 
 const Validator = require('./src/validators');
 
-
 const app = express();
 const server = require("http").Server(app);
 
@@ -285,7 +284,7 @@ app.post('/getslave', function(req, res) {
 });
 
 /**
- * Master update slave activity slave
+ * Master update slave activity
  */
 app.post('/manageslave', function(req, res) {
     res.setHeader('Content-Type', 'application/json');
@@ -314,6 +313,58 @@ app.post('/manageslave', function(req, res) {
                 }
             });
 
+        } else {
+            res.status(401).send('Unauthorized');
+        }
+    });
+});
+
+/**
+ * Master edit slave
+ */
+app.post('/editslave', function(req, res) {
+    res.setHeader('Content-Type', 'application/json');
+
+    const reqBody = req.body;
+    const validator = Validator.validate(reqBody, Validator.updateSlave, true);
+    if (validator.isError) {
+        res.status(validator.code).send(validator.message);
+        return;
+    }
+
+    MUserModel.findOne({token : reqBody.token}, function (err, user) {
+        if (user && user.isMaster) {
+            MUserModel.findById(reqBody.slave_id, (err, slaveExist) => {
+                if (slaveExist) {
+                    MUserModel.findOne({name: reqBody.name, masterId: user._id}, (err, slaveExist) => {
+                        if (!slaveExist || (slaveExist && slaveExist.id === reqBody.slave_id)) {
+                            let updateObject = {
+                                name: reqBody.name,
+                                phone: reqBody.phone,
+                            };
+                            if (reqBody.password !== '' && reqBody.repassword !== '') {
+                                updateObject.password = crypto.createHash('sha256', PASS_SALT).update(reqBody.password+'').digest('hex');
+                            }
+
+                            MUserModel.findByIdAndUpdate(reqBody.slave_id, updateObject, (err, doc) => {
+                                res.end(JSON.stringify({
+                                    ok: true,
+                                }));
+                            });
+                        } else {
+                            res.end(JSON.stringify({
+                                ok: false,
+                                message: 'Slave with name already exists'
+                            }));
+                        }
+                    });
+                } else {
+                    res.end(JSON.stringify({
+                        ok: false,
+                        message: 'Slave not exists'
+                    }));
+                }
+            });
         } else {
             res.status(401).send('Unauthorized');
         }

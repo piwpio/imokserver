@@ -91,11 +91,28 @@ function manageSlave(reqBody) {
     }
 }
 
+function updateSlave(reqBody) {
+    if (
+        reqBody.slave_id === undefined
+        || reqBody.name === undefined
+        || reqBody.phone === undefined
+        || reqBody.password === undefined
+        || reqBody.repassword === undefined
+    ) {
+        return _returnError(422, 'Not all parameters');
+    } else if (!reqBody.slave_id || !reqBody.name || !reqBody.phone) {
+        return _returnError(422, 'Not all parameters filled');
+    } else if (reqBody.password !== reqBody.repassword) {
+        return _returnError(422, 'PIN mismatch');
+    }
+}
+
 module.exports = {
     validate: validate,
     login: login,
     createMaster: createMaster,
     createSlave: createSlave,
     getSlave: getSlave,
-    manageSlave: manageSlave
+    manageSlave: manageSlave,
+    updateSlave: updateSlave
 };
