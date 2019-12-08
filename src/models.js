@@ -9,9 +9,9 @@ const userModel = {
     //slave stuff
     masterId: String,
     isOk: Boolean,
-    lastLocations: Array,
     isActive: Boolean,
-    interval: Number
+    interval: Number,
+    actions: Array
 };
 
 module.exports = {

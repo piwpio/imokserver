@@ -3,7 +3,7 @@ const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 const PASS_SALT = 'mlecznakrowalaciatka';
-const TOKEN_SALT = 'najlepszememe';
+const TOKEN_SALT = 'starebabyjebacpradem';
 
 const model = require('./src/models');
 const MUserSchema = new mongoose.Schema(model.userModel);
@@ -54,8 +54,7 @@ app.post('/login', function(req, res) {
             const password = crypto.createHash('sha256', PASS_SALT).update(reqBody.password).digest('hex');
             if (password === user.password) {
                 const a = Date.now() + '.' + new Date().getMilliseconds();
-                const token = crypto.createHash('sha256', TOKEN_SALT).update(a).digest('hex');
-
+                const token = crypto.createHash('sha256', TOKEN_SALT + user.name).update(a).digest('hex');
                 MUserModel.findByIdAndUpdate(user.id, {token: token}, (err, doc) => {
                     res.end(JSON.stringify({
                         ok: true,
@@ -85,6 +84,38 @@ app.post('/login', function(req, res) {
 });
 
 /**
+ * Check if still logged and return user
+ */
+app.post('/checkstilllogged', function(req, res) {
+    res.setHeader('Content-Type', 'application/json');
+
+    const reqBody = req.body;
+    const validator = Validator.validate(reqBody, null, true);
+    if (validator.isError) {
+        res.status(validator.code).send(validator.message);
+        return;
+    }
+
+    MUserModel.findOne({token : reqBody.token}, function (err, user) {
+        if (user) {
+            res.end(JSON.stringify({
+                ok: true,
+                data: {
+                    id: user.id,
+                    name: user.name,
+                    email: user.email,
+                    phone: user.phone,
+                    isMaster: user.isMaster,
+                    token: user.token
+                }
+            }));
+        } else {
+            res.status(401).send('Unauthorized');
+        }
+    });
+});
+
+/**
  * New master registration
  */
 app.post('/createmaster', function(req, res) {
@@ -105,12 +136,12 @@ app.post('/createmaster', function(req, res) {
                 email: reqBody.email,
                 phone: reqBody.phone,
                 password: password,
-                token: password,
+                token: '',
                 isMaster: true,
                 slaves: [],
                 masterId: '0',
                 isOk: true,
-                lastLocations: [],
+                actions: [],
                 isActive: false,
                 interval: 0,
             });
@@ -154,11 +185,12 @@ app.post('/masterslaves', function(req, res) {
                         return {
                             id: slave.id,
                             name: slave.name,
-                            isOk: slave.isOk,
                             phone: slave.phone,
+                            isOk: slave.isOk,
                             isActive: slave.isActive,
                             interval: slave.interval,
-                            lastLocations: slave.lastLocations
+                            actions: slave.actions,
+                            isLogged: slave.password !== ''
                         }
                     });
                     res.end(JSON.stringify({
@@ -203,14 +235,14 @@ app.post('/createslave', function(req, res) {
                             email: '',
                             phone: reqBody.phone,
                             password: password,
-                            token: password,
+                            token: '',
                             isMaster: false,
                             slaves: [],
                             masterId: user.id,
                             isOk: true,
-                            lastLocations: [],
                             isActive: false,
                             interval: 60 * 60,
+                            actions: []
                         });
                         slave.save((err, slave) => {
                             user.slaves.push(slave.id);
@@ -259,11 +291,12 @@ app.post('/getslave', function(req, res) {
                     const slaveRes = {
                         id: slave.id,
                         name: slave.name,
-                        isOk: slave.isOk,
                         phone: slave.phone,
-                        lastLocations: slave.lastLocations,
+                        isOk: slave.isOk,
                         isActive: slave.isActive,
                         interval: slave.interval,
+                        actions: slave.actions,
+                        isLogged: slave.password !== ''
                     };
                     res.end(JSON.stringify({
                         ok: true,
@@ -365,6 +398,80 @@ app.post('/editslave', function(req, res) {
                     }));
                 }
             });
+        } else {
+            res.status(401).send('Unauthorized');
+        }
+    });
+});
+
+/**
+ * Master logout slave
+ */
+app.post('/logoutslave', function(req, res) {
+    res.setHeader('Content-Type', 'application/json');
+
+    const reqBody = req.body;
+    const validator = Validator.validate(reqBody, null, true);
+    if (validator.isError) {
+        res.status(validator.code).send(validator.message);
+        return;
+    }
+
+    MUserModel.findOne({token : reqBody.token}, function (err, user) {
+        if (user && user.isMaster) {
+            MUserModel.findById(reqBody.slave_id, (err, slaveExist) => {
+                if (slaveExist) {
+                    MUserModel.findByIdAndUpdate(reqBody.slave_id, {token: ''}, (err, doc) => {
+                        res.end(JSON.stringify({
+                            ok: true
+                        }));
+                    });
+                } else {
+                    res.end(JSON.stringify({
+                        ok: false,
+                        message: 'Slave not exists'
+                    }));
+                }
+            });
+        } else {
+            res.status(401).send('Unauthorized');
+        }
+    });
+});
+
+/**
+ * Master delete slave
+ */
+app.post('/deleteslave', function(req, res) {
+    res.setHeader('Content-Type', 'application/json');
+
+    const reqBody = req.body;
+    const validator = Validator.validate(reqBody, Validator.deleteSlave, true);
+    if (validator.isError) {
+        res.status(validator.code).send(validator.message);
+        return;
+    }
+
+    MUserModel.findOne({token : reqBody.token}, function (err, user) {
+        if (user && user.isMaster) {
+            const slaveIndex = user.slaves.indexOf(reqBody.slave_id);
+            if (slaveIndex !== -1) {
+                const newSlaves = user.slaves.filter(function( slaveId ) {
+                    return slaveId !== reqBody.slave_id;
+                });
+                MUserModel.findByIdAndUpdate(user.id, {slaves: newSlaves}, (err, doc) => {
+                    MUserModel.findByIdAndUpdate(reqBody.slave_id, {masterId: ''}, (err, doc) => {
+                        res.end(JSON.stringify({
+                            ok: true
+                        }));
+                    });
+                });
+            } else {
+                res.end(JSON.stringify({
+                    ok: false,
+                    message: 'Slave not exists'
+                }));
+            }
         } else {
             res.status(401).send('Unauthorized');
         }

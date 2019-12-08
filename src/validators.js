@@ -107,6 +107,14 @@ function updateSlave(reqBody) {
     }
 }
 
+function deleteSlave(reqBody) {
+    if (reqBody.slave_id === undefined) {
+        return _returnError(422, 'Not all parameters');
+    } else if (!reqBody.slave_id) {
+        return _returnError(422, 'Not all parameters filled');
+    }
+}
+
 module.exports = {
     validate: validate,
     login: login,
@@ -114,5 +122,6 @@ module.exports = {
     createSlave: createSlave,
     getSlave: getSlave,
     manageSlave: manageSlave,
-    updateSlave: updateSlave
+    updateSlave: updateSlave,
+    deleteSlave: deleteSlave
 };
