@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const crypto = require('crypto');
 const PASS_SALT = 'mlecznakrowalaciatka';
 const TOKEN_SALT = 'starebabyjebacpradem';
+const PASS_SLAVE_SALT = 'korwinkroool';
 
 const model = require('./src/models');
 const MUserSchema = new mongoose.Schema(model.userModel);
@@ -50,30 +51,61 @@ app.post('/login', function(req, res) {
     }
 
     MUserModel.findOne({email : reqBody.email}, function (err, user) {
+        const a = Date.now() + '.' + new Date().getMilliseconds();
         if (user) {
-            const password = crypto.createHash('sha256', PASS_SALT).update(reqBody.password).digest('hex');
-            if (password === user.password) {
-                const a = Date.now() + '.' + new Date().getMilliseconds();
-                const token = crypto.createHash('sha256', TOKEN_SALT + user.name).update(a).digest('hex');
-                MUserModel.findByIdAndUpdate(user.id, {token: token}, (err, doc) => {
+            if (reqBody.master_login) {
+                // master login
+                const password = crypto.createHash('sha256', PASS_SALT).update(reqBody.password).digest('hex');
+                if (password === user.password) {
+                    const token = crypto.createHash('sha256', TOKEN_SALT + user.name).update(a).digest('hex');
+                    MUserModel.findByIdAndUpdate(user.id, {token: token}, (err, doc) => {
+                        res.end(JSON.stringify({
+                            ok: true,
+                            data: {
+                                id: user.id,
+                                name: user.name,
+                                email: user.email,
+                                phone: user.phone,
+                                isMaster: user.isMaster,
+                                token: token
+                            }
+                        }));
+                    });
+                } else {
                     res.end(JSON.stringify({
-                        ok: true,
-                        data: {
-                            id: user.id,
-                            name: user.name,
-                            email: user.email,
-                            phone: user.phone,
-                            isMaster: user.isMaster,
-                            token: token
-                        }
+                        ok: false,
+                        message: 'No user or wrong password'
                     }));
-                });
+                }
+
             } else {
-                res.end(JSON.stringify({
-                    ok: false,
-                    message: 'No user or wrong password'
-                }));
+                //salve login
+                const slavePassword = crypto.createHash('sha256', PASS_SLAVE_SALT).update(reqBody.password).digest('hex');
+                MUserModel.findOne({masterId: user.id, password : slavePassword}, function (err, slave) {
+                    if (slave) {
+                        const slaveToken = crypto.createHash('sha256', TOKEN_SALT + slave.name).update(a).digest('hex');
+                        MUserModel.findByIdAndUpdate(slave.id, {token: slaveToken}, (err, doc) => {
+                            res.end(JSON.stringify({
+                                ok: true,
+                                data: {
+                                    id: slave.id,
+                                    name: slave.name,
+                                    email: slave.email,
+                                    phone: slave.phone,
+                                    isMaster: slave.isMaster,
+                                    token: slaveToken
+                                }
+                            }));
+                        });
+                    } else {
+                        res.end(JSON.stringify({
+                            ok: false,
+                            message: 'No user or wrong password'
+                        }));
+                    }
+                });
             }
+
         } else {
             res.end(JSON.stringify({
                 ok: false,
@@ -190,7 +222,7 @@ app.post('/masterslaves', function(req, res) {
                             isActive: slave.isActive,
                             interval: slave.interval,
                             actions: slave.actions,
-                            isLogged: slave.password !== ''
+                            isLogged: slave.token !== ''
                         }
                     });
                     res.end(JSON.stringify({
@@ -229,7 +261,7 @@ app.post('/createslave', function(req, res) {
             if (user.slaves.length < 3) {
                 MUserModel.findOne({name: reqBody.name, masterId: user._id}, (err, slaveExist) => {
                     if (!slaveExist) {
-                        const password = crypto.createHash('sha256', PASS_SALT).update(reqBody.password+'').digest('hex');
+                        const password = crypto.createHash('sha256', PASS_SLAVE_SALT).update(reqBody.password+'').digest('hex');
                         const slave = new MUserModel({
                             name: reqBody.name,
                             email: '',
@@ -296,7 +328,7 @@ app.post('/getslave', function(req, res) {
                         isActive: slave.isActive,
                         interval: slave.interval,
                         actions: slave.actions,
-                        isLogged: slave.password !== ''
+                        isLogged: slave.token !== ''
                     };
                     res.end(JSON.stringify({
                         ok: true,
@@ -376,7 +408,7 @@ app.post('/editslave', function(req, res) {
                                 phone: reqBody.phone,
                             };
                             if (reqBody.password !== '' && reqBody.repassword !== '') {
-                                updateObject.password = crypto.createHash('sha256', PASS_SALT).update(reqBody.password+'').digest('hex');
+                                updateObject.password = crypto.createHash('sha256', PASS_SLAVE_SALT).update(reqBody.password+'').digest('hex');
                             }
 
                             MUserModel.findByIdAndUpdate(reqBody.slave_id, updateObject, (err, doc) => {
@@ -472,6 +504,38 @@ app.post('/deleteslave', function(req, res) {
                     message: 'Slave not exists'
                 }));
             }
+        } else {
+            res.status(401).send('Unauthorized');
+        }
+    });
+});
+
+/**
+ * Slave isok isok
+ */
+app.post('/isok', function(req, res) {
+    res.setHeader('Content-Type', 'application/json');
+
+    const reqBody = req.body;
+    const validator = Validator.validate(reqBody, Validator.isOk, true);
+    if (validator.isError) {
+        res.status(validator.code).send(validator.message);
+        return;
+    }
+
+    MUserModel.findOne({token : reqBody.token}, function (err, user) {
+        if (user && !user.isMaster) {
+            user.actions.unshift({
+                lat: 50.0729063,
+                long: 19.9079619,
+                time: Date.now(),
+                isOk: reqBody.is_ok
+            });
+            MUserModel.findByIdAndUpdate(user.id, {isOk: reqBody.is_ok, actions: user.actions}, (err, doc) => {
+                res.end(JSON.stringify({
+                    ok: true
+                }));
+            });
         } else {
             res.status(401).send('Unauthorized');
         }

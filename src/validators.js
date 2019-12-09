@@ -33,9 +33,9 @@ function validate(reqBody, validator, isToken) {
 }
 
 function login(reqBody) {
-    if (reqBody.password === undefined || reqBody.email === undefined) {
+    if (reqBody.password === undefined || reqBody.email === undefined || reqBody.master_login === undefined) {
         return _returnError(422, 'Not all parameters');
-    } else if (!reqBody.email || !reqBody.password) {
+    } else if (!reqBody.email || !reqBody.password || typeof reqBody.master_login !== 'boolean') {
         return _returnError(422, 'Not all parameters filled');
     }
 }
@@ -115,6 +115,14 @@ function deleteSlave(reqBody) {
     }
 }
 
+function isOk(reqBody) {
+    if (reqBody.is_ok === undefined) {
+        return _returnError(422, 'Not all parameters');
+    } else if (typeof reqBody.is_ok !== 'boolean') {
+        return _returnError(422, 'Not all parameters filled');
+    }
+}
+
 module.exports = {
     validate: validate,
     login: login,
@@ -123,5 +131,6 @@ module.exports = {
     getSlave: getSlave,
     manageSlave: manageSlave,
     updateSlave: updateSlave,
-    deleteSlave: deleteSlave
+    deleteSlave: deleteSlave,
+    isOk: isOk
 };
