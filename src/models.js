@@ -11,7 +11,9 @@ const userModel = {
     isOk: Boolean,
     isActive: Boolean,
     interval: Number,
-    actions: Array
+    actions: Array,
+    activateTime: Number,
+    lastOkTime: Number
 };
 
 module.exports = {

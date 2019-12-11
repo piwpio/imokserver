@@ -176,6 +176,8 @@ app.post('/createmaster', function(req, res) {
                 actions: [],
                 isActive: false,
                 interval: 0,
+                activateTime: 0,
+                lastOkTime: 0
             });
             user.save().then(() => {
                 res.end(JSON.stringify({
@@ -274,7 +276,9 @@ app.post('/createslave', function(req, res) {
                             isOk: true,
                             isActive: false,
                             interval: 60 * 60,
-                            actions: []
+                            actions: [],
+                            activateTime: 0,
+                            lastOkTime: 0
                         });
                         slave.save((err, slave) => {
                             user.slaves.push(slave.id);
@@ -365,7 +369,15 @@ app.post('/manageslave', function(req, res) {
         if (user && user.isMaster) {
             MUserModel.findOne({_id: reqBody.slave_id, masterId: user._id}, (err, slave) => {
                 if (slave) {
-                    MUserModel.findByIdAndUpdate(reqBody.slave_id, {isActive: reqBody.is_active, interval: reqBody.interval}, (err, doc) => {
+                    const updateObject = {
+                        isActive: reqBody.is_active,
+                        interval: reqBody.interval,
+                        activateTime: reqBody.is_active ? Date.now() : 0
+                    };
+                    if (!reqBody.is_active) {
+                        updateObject.isOk = true;
+                    }
+                    MUserModel.findByIdAndUpdate(reqBody.slave_id, updateObject, (err, doc) => {
                         res.end(JSON.stringify({
                             ok: true
                         }));
@@ -492,7 +504,7 @@ app.post('/deleteslave', function(req, res) {
                     return slaveId !== reqBody.slave_id;
                 });
                 MUserModel.findByIdAndUpdate(user.id, {slaves: newSlaves}, (err, doc) => {
-                    MUserModel.findByIdAndUpdate(reqBody.slave_id, {masterId: ''}, (err, doc) => {
+                    MUserModel.findByIdAndUpdate(reqBody.slave_id, {masterId: '', token: ''}, (err, doc) => {
                         res.end(JSON.stringify({
                             ok: true
                         }));
@@ -531,7 +543,14 @@ app.post('/isok', function(req, res) {
                 time: Date.now(),
                 isOk: reqBody.is_ok
             });
-            MUserModel.findByIdAndUpdate(user.id, {isOk: reqBody.is_ok, actions: user.actions}, (err, doc) => {
+
+            const objUpdate = {
+                isOk: reqBody.is_ok,
+                actions: user.actions,
+                lastOkTime: reqBody.is_ok ? Date.now() : user.lastOkTime
+            };
+
+            MUserModel.findByIdAndUpdate(user.id, objUpdate, (err, doc) => {
                 res.end(JSON.stringify({
                     ok: true
                 }));
@@ -541,3 +560,49 @@ app.post('/isok', function(req, res) {
         }
     });
 });
+
+function checkActiveSlaves() {
+    const now = Date.now();
+    console.log('tick');
+    setTimeout(() => {
+        MUserModel.find({isActive : true}, function (err, slaves) {
+
+            if (slaves.length) {
+                slaves.forEach(slave => {
+                    if (slave.token) {
+                        if (now >= slave.activateTime + (slave.interval * 1000)) {
+                            let lastOkTolerance = 5 * 60 * 1000;
+                            if (slave.interval === 60) {
+                                lastOkTolerance = 30000; // 30 seconds
+                            }
+
+                            if (now >= slave.lastOkTime + lastOkTolerance) { // 5 minutes
+                                //not ok
+                                const updateObject = {
+                                    isOk: false,
+                                    activateTime: slave.activateTime + (slave.interval * 1000)
+                                };
+                                MUserModel.findByIdAndUpdate(slave.id, updateObject, (err, doc) => {
+                                    console.log('updated slave cron NOT OK ' + slave.id + ' ' + slave.name);
+                                });
+                            } else {
+                                //ok
+                                const updateObject = {
+                                    activateTime: slave.activateTime + (slave.interval * 1000)
+                                };
+                                MUserModel.findByIdAndUpdate(slave.id, updateObject, (err, doc) => {
+                                    console.log('updated slave cron OK ' + slave.id + ' ' + slave.name);
+                                });
+                            }
+                        }
+                    }
+                });
+            }
+
+            checkActiveSlaves();
+
+        });
+    }, 10000);
+}
+
+checkActiveSlaves();
